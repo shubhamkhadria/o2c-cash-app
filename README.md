@@ -11,6 +11,8 @@ It reads bank payments, works out which open invoices they pay, and flags uncert
 - [ ] AI extraction from remittance documents
 - [ ] Review screen and online demo
 
+## Matching rules: see [docs/matching_rules.md](docs/matching_rules.md)
+
 ## How to run (GitHub Codespaces)
 pip install pandas
 python generate_ledger.py      # build the ledger in o2c.db
