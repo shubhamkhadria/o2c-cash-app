@@ -22,6 +22,6 @@ SELECT c.name, t.quarter, t.invoices_paid, t.prev_quarter_days_late, t.avg_days_
        ROUND(t.avg_days_late - t.prev_quarter_days_late, 1) AS change_in_days
 FROM trend t
 JOIN customers c ON c.customer_id = t.customer_id
-WHERE t.prev_quarter_days_late IS NOT NULL
+WHERE t.prev_quarter_days_late IS NOT NULL /* AND t.invoices_paid >= 3 */
 ORDER BY change_in_days DESC
 LIMIT 10;

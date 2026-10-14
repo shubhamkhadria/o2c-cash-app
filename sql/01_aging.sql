@@ -11,7 +11,8 @@ SELECT
     WHEN days_past_due <= 30 THEN '2. 1-30 days'
     WHEN days_past_due <= 60 THEN '3. 31-60 days'
     WHEN days_past_due <= 90 THEN '4. 61-90 days'
-    ELSE                          '5. 90+ days'
+    WHEN days_past_due <= 120 THEN '5. 91-120 days'
+    ELSE                          '6. 120+ days'
   END                                   AS bucket,
   COUNT(*)                              AS invoices,
   ROUND(SUM(open_amount), 2)            AS open_amount,

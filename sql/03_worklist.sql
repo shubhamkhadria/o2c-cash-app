@@ -10,9 +10,9 @@ overdue AS (
   CROSS JOIN params p
   WHERE o.due_date < p.as_of
   GROUP BY c.region, c.customer_id, c.name
-)
+),
 SELECT region,
        RANK() OVER (PARTITION BY region ORDER BY overdue_amount DESC) AS rnk,
-       name, overdue_invoices, overdue_amount, oldest_days_past_due
+       name, overdue_invoices, overdue_amount, oldest_days_past_due 
 FROM overdue
 ORDER BY region, rnk;
