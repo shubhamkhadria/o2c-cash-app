@@ -1,6 +1,6 @@
 # Cash application matching rules
 
-Version 1.0 · Owner: Shubham Khadria · Applies from week 5
+Version 1.1 · Owner: Shubham Khadria · Applies from week 5
 
 ## Purpose
 Decide, for each customer payment in `bank_payments`, which open invoices it pays,
@@ -44,3 +44,9 @@ Residual items inherit the original invoice's due date, so aging and DSO stay ac
 - Fixing mistyped references (week 7, fuzzy matching)
 - Using payer names (week 7)
 - Reading remittance PDFs and emails (week 6, AI extraction)
+
+## Change log
+| Version | Change | Reason |
+| --- | --- | --- |
+| 1.1 | R3 Partial moved from Auto to Review | A mistyped reference that belonged to another customer was auto-applied as a partial payment. Rework from wrong postings costs more than review. Revisit when payer-name checks exist (week 7) |
+| 1.0 | First version | |

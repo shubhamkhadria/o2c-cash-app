@@ -71,9 +71,8 @@ def decide(payment):
         if amount >= SHORT_PAY_THRESHOLD * total:                    # R2 deduction
             return ([match(inv_id, amount, "R2 Deduction", "Auto")],
                     [residual(inv_id, short, "Deduction", "Short pay - to investigate")])
-        return ([match(inv_id, amount, "R3 Partial", "Auto")],     # R3 partial
+        return ([match(inv_id, amount, "R3 Partial", "Review")],     # R3 partial
                 [residual(inv_id, short, "Balance due", "Partial payment")])
-
     same_amount = open_items[(open_items["open_amount"] - amount).abs() <= TOLERANCE]
     if len(same_amount) == 1:                                        # R6 amount only
         inv_id = same_amount.iloc[0]["invoice_id"]
