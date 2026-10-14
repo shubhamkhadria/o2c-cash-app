@@ -7,7 +7,7 @@ It reads bank payments, works out which open invoices they pay, and flags uncert
 - [x] Synthetic AR ledger (customers, invoices, payments) modeled on SAP AR
 - [x] AR reports in SQL: aging, DSO, collections worklist, payment trends
 - [x] Bank statement loader that cleans a messy bank file
-- [ ] Rule-based matcher with accuracy tests
+- [x] Rule-based matcher with accuracy tests
 - [ ] AI extraction from remittance documents
 - [ ] Review screen and online demo
 
