@@ -1,0 +1,216 @@
+{
+  "remit_01.txt": {
+    "payer_name": "Granite Chemicals Inc.",
+    "payment_date": "2026-10-14",
+    "payment_amount": 1758.78,
+    "invoices": [
+      {
+        "invoice_number": "90001992",
+        "amount_paid": 1758.78,
+        "deduction_amount": 79.48,
+        "deduction_reason": "Freight charge disputed"
+      }
+    ]
+  },
+  "remit_02.txt": {
+    "payer_name": "WESTBROOK PACKAGING CORP.",
+    "payment_date": "2026-10-13",
+    "payment_amount": 2447.9,
+    "invoices": [
+      {
+        "invoice_number": "90001762",
+        "amount_paid": 2447.9,
+        "deduction_amount": 246.86,
+        "deduction_reason": "Freight charge disputed"
+      }
+    ]
+  },
+  "remit_03.txt": {
+    "payer_name": "Northgate Packaging Corp.",
+    "payment_date": "2026-10-14",
+    "payment_amount": 829.39,
+    "invoices": [
+      {
+        "invoice_number": "90001978",
+        "amount_paid": 829.39,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_04.txt": {
+    "payer_name": "Granite Chemicals Co.",
+    "payment_date": "2026-10-14",
+    "payment_amount": 37992.45,
+    "invoices": [
+      {
+        "invoice_number": "90001925",
+        "amount_paid": 37992.45,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_05.txt": {
+    "payer_name": "Horizon Retail Group LLC",
+    "payment_date": "2026-10-13",
+    "payment_amount": 1337.74,
+    "invoices": [
+      {
+        "invoice_number": "90001940",
+        "amount_paid": 1337.74,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_06.txt": {
+    "payer_name": "Prairie Foods LLC",
+    "payment_date": "2026-10-15",
+    "payment_amount": 2890.82,
+    "invoices": [
+      {
+        "invoice_number": "90001806",
+        "amount_paid": 2890.82,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_07.txt": {
+    "payer_name": "Horizon Electric Inc.",
+    "payment_date": "2026-10-15",
+    "payment_amount": 1000.01,
+    "invoices": [
+      {
+        "invoice_number": "90001946",
+        "amount_paid": 1000.01,
+        "deduction_amount": 525.32,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_08.txt": {
+    "payer_name": "PRAIRIE FOODS LLC",
+    "payment_date": "2026-10-15",
+    "payment_amount": 812.65,
+    "invoices": [
+      {
+        "invoice_number": "90001207",
+        "amount_paid": 812.65,
+        "deduction_amount": 1446.31,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_09.txt": {
+    "payer_name": "Pinnacle Healthcare Inc.",
+    "payment_date": "2026-10-13",
+    "payment_amount": 22116.94,
+    "invoices": [
+      {
+        "invoice_number": "90001821",
+        "amount_paid": 22116.94,
+        "deduction_amount": 16093.67,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_10.txt": {
+    "payer_name": "Granite Chemicals Co.",
+    "payment_date": "2026-10-13",
+    "payment_amount": 39194.97,
+    "invoices": [
+      {
+        "invoice_number": "90001944",
+        "amount_paid": 39194.97,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_11.txt": {
+    "payer_name": "Cedar Auto Parts Co.",
+    "payment_date": "2026-10-14",
+    "payment_amount": 227.35,
+    "invoices": [
+      {
+        "invoice_number": "90001388",
+        "amount_paid": 227.35,
+        "deduction_amount": 409.13,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_12.txt": {
+    "payer_name": "Ironwood Auto Parts Corp.",
+    "payment_date": "2026-10-14",
+    "payment_amount": 1120.37,
+    "invoices": [
+      {
+        "invoice_number": "90001837",
+        "amount_paid": 1210.37,
+        "deduction_amount": 2505.14,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_13.txt": {
+    "payer_name": "HARBOR AUTO PARTS INC.",
+    "payment_date": "2026-10-15",
+    "payment_amount": 640.64,
+    "invoices": [
+      {
+        "invoice_number": "90001995",
+        "amount_paid": 640.64,
+        "deduction_amount": 331.38,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_14.txt": {
+    "payer_name": "OAKRIDGE BUILDING PRODUCTS LLC",
+    "payment_date": "2026-10-15",
+    "payment_amount": 16196.99,
+    "invoices": [
+      {
+        "invoice_number": "90001979",
+        "amount_paid": 16196.99,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  },
+  "remit_15.txt": {
+    "payer_name": "Horizon Retail Group LLC",
+    "payment_date": "2026-10-14",
+    "payment_amount": 1328.63,
+    "invoices": [
+      {
+        "invoice_number": "90001967",
+        "amount_paid": 1328.63,
+        "deduction_amount": 657.02,
+        "deduction_reason": "Partial payment, balance to follow"
+      }
+    ]
+  },
+  "remit_16.txt": {
+    "payer_name": "Copperfield Healthcare Co.",
+    "payment_date": "2026-10-15",
+    "payment_amount": 9983.11,
+    "invoices": [
+      {
+        "invoice_number": "90001268",
+        "amount_paid": 1113.01,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      },
+      {
+        "invoice_number": "90001919",
+        "amount_paid": 8870.1,
+        "deduction_amount": 0,
+        "deduction_reason": null
+      }
+    ]
+  }
+}
