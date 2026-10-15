@@ -82,6 +82,8 @@ def validate(ext):
             issues.append(f"{inv}: paid + deduction does not equal the open amount")
         if simple_name(open_items.loc[inv, "customer_name"]) != simple_name(ext["payer_name"]):
             issues.append(f"{inv} belongs to {open_items.loc[inv, 'customer_name']}, not the payer")
+        if l["deduction_amount"] > 0 and not l["deduction_reason"]:
+            issues.append(f"{inv}: deduction of {l['deduction_amount']:.2f} has no reason")
     return issues
 
 
