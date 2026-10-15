@@ -49,4 +49,4 @@ Residual items inherit the original invoice's due date, so aging and DSO stay ac
 | Version | Change | Reason |
 | --- | --- | --- |
 | 1.1 | R3 Partial moved from Auto to Review | A mistyped reference that belonged to another customer was auto-applied as a partial payment. Rework from wrong postings costs more than review. Revisit when payer-name checks exist (week 7) |
-| 1.0 | First version | |
+| 1.0 | First version | |git status
