@@ -21,7 +21,7 @@
         "invoice_number": "90001762",
         "amount_paid": 2447.9,
         "deduction_amount": 246.86,
-        "deduction_reason": null
+        "deduction_reason": "Freight charge disputed"
       }
     ]
   },

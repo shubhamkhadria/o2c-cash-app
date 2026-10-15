@@ -21,7 +21,8 @@ con = sqlite3.connect("o2c.db")
 payments = pd.read_sql("SELECT * FROM bank_payments", con)
 open_items = pd.read_sql("SELECT invoice_id, customer_id, due_date, open_amount FROM open_items", con)
 open_by_id = open_items.set_index("invoice_id")
-print(f"Step 1  {len(payments)} payments, {len(open_items)} open invoices")
+remits = pd.read_sql("SELECT * FROM remittance_extractions WHERE validation_status = 'Validated'", con)
+#print(f"Step 1  {len(payments)} payments, {len(open_items)} open invoices")
 
 
 # ---------------------------------------------------------------
@@ -53,7 +54,15 @@ def decide(payment):
         return {"bank_ref": ref, "original_invoice_id": invoice_id, "customer_id": inv["customer_id"],
                 "amount": round(amt, 2), "residual_type": rtype, "reason": reason,
                 "due_date": inv["due_date"]}
-
+    advice = remits[remits["bank_ref"] == ref]
+    if len(advice):                                                  # R0 remittance advice
+        matches, residuals = [], []
+        for line in advice.itertuples():
+            matches.append(match(line.invoice_id, line.amount_paid, "R0 Remittance advice", "Auto"))
+            if line.deduction_amount > TOLERANCE:
+                rtype = "Balance due" if "partial" in line.deduction_reason.lower() else "Deduction"
+                residuals.append(residual(line.invoice_id, line.deduction_amount, rtype, line.deduction_reason))
+        return matches, residuals
     if refs:
         invoices = open_by_id.loc[refs]
         total = invoices["open_amount"].sum()
