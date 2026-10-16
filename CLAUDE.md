@@ -10,16 +10,22 @@ project for finance systems, presales and AI program roles. He owns the design d
 ## How to run
 - Install: `pip install -r requirements.txt`
 - App: `streamlit run Home.py` (port 8501; in Codespaces use the Ports tab)
-- Pipeline scripts run from the repo root, in this order when rebuilding data:
-  `generate_ledger.py` → `make_bank_file.py` → `load_bank_file.py` → `make_remittances.py`
-  → `extract_remittances.py` → `make_bank_accounts.py` → `load_bank_accounts.py`
-  → `identify_payer.py` → `matcher.py` → `grade_matcher.py`
-- Ad-hoc SQL: `python q.py sql/<file>.sql` or `sqlite3 o2c.db`
+- Always run scripts from the repo root (paths like `o2c.db` and `data/` are relative to it).
+- Rebuild the data in this order:
+  `python generators/generate_ledger.py` → `python generators/make_bank_file.py`
+  → `python pipeline/load_bank_file.py` → `python generators/make_remittances.py`
+  → `python pipeline/extract_remittances.py` → `python generators/make_bank_accounts.py`
+  → `python pipeline/load_bank_accounts.py` → `python pipeline/identify_payer.py`
+  → `python pipeline/matcher.py` → `python tools/grade_matcher.py`
+- Ad-hoc SQL: `python tools/q.py sql/<file>.sql` or `sqlite3 o2c.db`
 
 ## Layout
 - `Home.py`, `pages/` — Streamlit UI (manager dashboard, analyst workbench)
-- `o2c/` — engine as importable functions (`db.py`, `posting.py`); new logic goes here
-- top-level `*.py` — pipeline scripts and data generators (to be moved into `generators/` and `tools/` later)
+- `o2c/` — engine as importable functions (`db.py`, `posting.py`); new product logic goes here
+- `pipeline/` — product steps run as scripts (load bank file, extract remittances, load bank accounts,
+  identify payer, matcher); to be turned into `o2c/` functions over time
+- `generators/` — synthetic test data (ledger, bank file, remittances, bank accounts); not part of the product
+- `tools/` — developer helpers (`q.py`, `grade_matcher.py`, `confirm_payer.py`, `setup_check.py`)
 - `sql/` — reporting queries (aging, DSO, worklist, trends)
 - `docs/matching_rules.md` — matcher spec with change log (currently v1.2)
 - `fixtures/` — committed test inputs (stub AI extractions)
