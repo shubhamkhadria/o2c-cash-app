@@ -2,32 +2,49 @@
 pages/1_Cash_Application.py  -  Week 8: the workbench where an AR analyst reviews proposals.
 
 Streamlit turns every file in pages/ into a page in the sidebar automatically.
-Session 1: look at the evidence. Session 2 adds the Accept and Reject buttons.
+Session 1: look at the evidence. Session 2: Accept posts to the ledger, Reject sends to exceptions.
 """
 
 import streamlit as st
 
+from o2c import posting
 from o2c.db import query
 
 st.set_page_config(page_title="Cash Application", layout="wide")
+posting.setup()
+user = st.sidebar.text_input("Signed in as", value="AR analyst")
 st.title("Cash application workbench")
+if "flash" in st.session_state:                     # message left by the last button click
+    kind, message = st.session_state.pop("flash")
+    getattr(st, kind)(message)
+
+
+def act(action, *args):
+    """Run Accept or Reject, keep the result message, and redraw the page."""
+    try:
+        st.session_state["flash"] = ("success", action(*args))
+    except ValueError as e:                          # our own checks, e.g. "already posted"
+        st.session_state["flash"] = ("error", str(e))
+    st.rerun()
+
 
 # ---------------------------------------------------------------
 # Step 1: the queue - every payment with its status, the riskiest first
 # ---------------------------------------------------------------
 payments = query("""
-    SELECT COALESCE(m.status, 'Exception') AS status, b.bank_ref, b.payment_date,
+    SELECT COALESCE(d.decision, m.status, 'Exception') AS status, b.bank_ref, b.payment_date,
            b.payer_name, b.amount, b.remittance_text, a.account_last4
     FROM bank_payments b
     LEFT JOIN payment_payer_accounts a USING (bank_ref)
     LEFT JOIN (SELECT DISTINCT bank_ref, status FROM match_results) m USING (bank_ref)
-    ORDER BY CASE COALESCE(m.status, 'Exception') WHEN 'Exception' THEN 0 WHEN 'Review' THEN 1 ELSE 2 END,
+    LEFT JOIN decisions d USING (bank_ref)
+    ORDER BY CASE COALESCE(d.decision, m.status, 'Exception') WHEN 'Exception' THEN 0 WHEN 'Review' THEN 1 ELSE 2 END,
              b.amount DESC
 """)
 
 view = st.radio("Show", ["Needs a person", "All payments"], horizontal=True)
 if view == "Needs a person":
-    payments = payments[payments["status"] != "Auto"]
+    payments = payments[payments["status"].isin(["Review", "Exception"])]
 
 st.dataframe(payments[["status", "bank_ref", "payment_date", "payer_name", "amount"]]
              .style.format({"amount": "${:,.2f}"}), hide_index=True)
@@ -107,4 +124,20 @@ with col3:
         st.write("**New open items it would create:**")
         st.dataframe(residuals.style.format({"amount": "${:,.2f}"}), hide_index=True)
 
-st.info("Accept and Reject buttons arrive in session 2.")
+# ---------------------------------------------------------------
+# Step 4: the decision - a person approves or rejects, and it is logged
+# ---------------------------------------------------------------
+st.divider()
+decision = query("SELECT * FROM decisions WHERE bank_ref = ?", (ref,))
+if len(decision):
+    d = decision.iloc[0]
+    st.info(f"{d['decision']} by {d['decided_by']} on {d['decided_at']}. {d['note']}")
+else:
+    a, r = st.columns(2)
+    with a:
+        if st.button("Accept and post", type="primary", disabled=lines.empty):
+            act(posting.accept, ref, user)
+    with r:
+        note = st.text_input("Reason for rejecting")
+        if st.button("Reject"):
+            act(posting.reject, ref, user, note)
