@@ -7,6 +7,7 @@ Run it with:   streamlit run Home.py
 import streamlit as st
 
 from o2c import posting
+from o2c.checks import health_checks, measures
 from o2c.db import query, query_file
 
 st.set_page_config(page_title="O2C Cash Application", layout="wide")
@@ -49,6 +50,23 @@ if len(waiting_auto):
         posted, skipped = posting.post_all_auto(user)
         st.session_state["flash"] = ("success", f"Posted {posted} payments. Skipped: {len(skipped)}")
         st.rerun()                                  # run the page again so the numbers update
+
+# ---------------------------------------------------------------
+# Step 2b: the roadmap's phase 1 measures, and the daily health check
+# ---------------------------------------------------------------
+m = measures()
+c6, c7, c8 = st.columns(3)
+c6.metric("Unapplied cash", f"${m['unapplied_cash']:,.0f}",
+          help="Cash received but not yet posted to any invoice")
+c7.metric("DSO", f"{m['dso_days']:.1f} days", help="Open AR / last 90 days of sales x 90")
+c8.metric("Accuracy vs answer key (test mode)",
+          "n/a" if m["accuracy"] is None else f"{m['accuracy']:.0%}",
+          help=f"Share of {m['posted_checked']} posted payments applied to exactly the right invoices. "
+               "Only possible on synthetic data, which has an answer key")
+
+st.subheader("Daily health check")
+for name, passed, detail in health_checks():
+    (st.success if passed else st.error)(f"{'✓' if passed else '✗'} {name}. {detail}")
 
 # ---------------------------------------------------------------
 # Step 3: where the cash went, and how we knew who paid
