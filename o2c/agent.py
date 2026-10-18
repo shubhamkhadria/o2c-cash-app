@@ -5,9 +5,9 @@ It investigates payments the rules could not settle, using READ-ONLY tools, and 
 action with its evidence. It never posts: a person approves on the Exceptions page, and
 posting.py does the posting with its usual checks and audit log.
 
-PLANNER = "playbook": the reasoning is a fixed set of steps (free, repeatable, no API key).
-With an API key, an LLM could choose which tool to call next and write the hypothesis;
-the tools, the guardrails and the investigation log would stay exactly the same.
+Two planners share the same tools, guardrails and investigation log:
+  "playbook"  fixed steps written in code (free, repeatable, predictable)
+  "llm"       a local model (Ollama) chooses the tool calls itself: see llm_planner.py
 """
 
 import json
@@ -174,8 +174,8 @@ def _guardrails(ref, action, lines, residuals):
     return checks
 
 
-def _result(ref, steps, hypothesis, action, lines, residuals, confidence, proposal):
-    return {"bank_ref": ref, "planner": PLANNER, "steps": steps, "hypothesis": hypothesis, "action": action,
+def _result(ref, steps, hypothesis, action, lines, residuals, confidence, proposal, planner=PLANNER):
+    return {"bank_ref": ref, "planner": planner, "steps": steps, "hypothesis": hypothesis, "action": action,
             "lines": lines, "residuals": residuals, "confidence": confidence, "proposal": proposal,
             "guardrails": _guardrails(ref, action, lines, residuals)}
 
@@ -192,12 +192,17 @@ def setup():
     con.close()
 
 
-def run(ref):
+def run(ref, planner=PLANNER):
+    """planner = "playbook" (fixed steps) or "llm" (a local model chooses the steps)."""
     setup()
-    result = investigate(ref)
+    if planner == "llm":
+        from o2c import llm_planner
+        result = llm_planner.investigate(ref)
+    else:
+        result = investigate(ref)
     con = sqlite3.connect(DB_PATH)
     con.execute("INSERT INTO investigations VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)",
-                (ref, datetime.now().strftime("%Y-%m-%d %H:%M"), PLANNER, result["hypothesis"], result["action"],
+                (ref, datetime.now().strftime("%Y-%m-%d %H:%M"), result["planner"], result["hypothesis"], result["action"],
                  result["proposal"], result["confidence"], json.dumps(result)))
     con.commit()
     con.close()

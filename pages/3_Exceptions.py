@@ -56,8 +56,14 @@ ref = st.selectbox("Open an exception", list(labels), format_func=labels.get)
 # ---------------------------------------------------------------
 inv = agent.latest(ref)
 if inv is None or inv["outcome"]:
+    planner = st.radio("Reasoning", ["playbook", "llm"], horizontal=True,
+                       help="playbook: fixed steps in code. llm: a local model (Ollama) chooses the steps itself")
     if st.button("Run the investigation", type="primary"):
-        agent.run(ref)
+        try:
+            with st.spinner("Investigating... (the local model can take a minute)"):
+                agent.run(ref, planner)
+        except Exception as e:                       # e.g. Ollama not running
+            st.session_state["flash"] = ("error", f"The investigation could not run: {e}")
         st.rerun()
     st.stop()
 
@@ -65,14 +71,16 @@ left, right = st.columns([3, 2])
 with left:
     st.subheader("Investigation log")
     st.caption(f"Run {inv['run_at']} · reasoning: {inv['planner']} · every step uses a read-only tool")
+    if inv["planner"] == "llm":
+        st.caption("The model chose each tool call below; the rules worked out the amounts and checked the guardrails.")
     for n, step in enumerate(inv["steps"], start=1):
         st.markdown(f"**{n}. {step['tool']}**  \n{step['finding']}")
 
 with right:
     st.subheader("The agent's view")
-    st.info(inv["hypothesis"])
+    st.info(inv["hypothesis"].replace("$", r"\$")) 
     st.metric("Confidence", inv["confidence"])
-    st.write(f"**Proposal:** {inv['proposal']}")
+    st.write(f"**Proposal:** {inv['proposal']}".replace("$", r"\$"))
     if inv["lines"]:
         st.dataframe([{"invoice": i, "apply": f"${a:,.2f}"} for i, a in inv["lines"]], hide_index=True)
     if inv["residuals"]:
