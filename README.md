@@ -151,7 +151,7 @@ exceptions agent to catch) and the exceptions agent can use its rule playbook. T
 
 The prototype is the first step of a wider design for agentic finance across order to cash,
 procure to pay, record to report, treasury and FP&A:
-[Agentic Finance Operating Model (PDF)](docs/agentic-finance-operating-model.pdf).
+[Agentic Finance Operating Model (PDF)](docs/Agentic%20Finance%20Operating%20Model.pdf).
 
 ## Limitations and next steps
 
@@ -160,12 +160,14 @@ procure to pay, record to report, treasury and FP&A:
 - Model outputs vary from run to run; results above are reported as ranges for that reason.
 - Next: deductions and collections agents, a second ERP's chart of accounts through the mapping agent.
 
-<sub>References are cited for attribution only; this work is not affiliated with or endorsed by McKinsey, Bain, Deloitte, Gartner, SAP or any other organization mentioned. SAP is a trademark of SAP SE; all other trademarks belong to their respective owners.</sub>
+
 
 ## How this was built
 
 Built with Claude (Anthropic) as an AI pair-programmer and writing partner.
 I set the scope, the finance design, the business rules and controls, ran every test and checked every result; Claude drafted much of the code, documentation and slide text and explained it as we went.
+
+<sub>References are cited for attribution only; this work is not affiliated with or endorsed by McKinsey, Bain, Deloitte, Gartner, SAP or any other organization mentioned. SAP is a trademark of SAP SE; all other trademarks belong to their respective owners.</sub>
 
 ---
 Built by Shubham Khadria · [LinkedIn](https://www.linkedin.com/in/shubhamkhadria)
