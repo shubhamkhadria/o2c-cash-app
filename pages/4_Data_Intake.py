@@ -10,6 +10,7 @@ The sidebar runs the pipeline (extract, identify payer, match) on whatever is lo
 import os
 import subprocess
 import sys
+import time
 
 import streamlit as st
 
@@ -23,14 +24,30 @@ PIPELINE = [("Read remittances", "pipeline/extract_remittances.py"),
 
 
 def run_scripts(steps):
-    """Run pipeline scripts one after another, exactly as you would in the terminal; stop at the first error."""
+    """Run pipeline scripts one after another, exactly as you would in the terminal; stop at the first error.
+    Each script's output is shown live, line by line, so a slow step (an AI model reading emails) never
+    looks like a frozen screen."""
     out = []
-    for label, script in steps:
-        r = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=900)
-        out.append(f"=== {label}  ({script})\n{r.stdout[-2500:]}{r.stderr[-1500:]}")
-        if r.returncode != 0:
-            out.append(f"Stopped: {script} failed.")
-            break
+    with st.status("Running the pipeline...", expanded=True) as status:
+        for n, (label, script) in enumerate(steps, start=1):
+            st.write(f"**Step {n} of {len(steps)}: {label}**")
+            live = st.empty()
+            started, lines = time.time(), []
+            proc = subprocess.Popen([sys.executable, "-u", script], stdout=subprocess.PIPE,   # -u: print lines at once
+                                    stderr=subprocess.STDOUT, text=True)
+            for line in proc.stdout:
+                lines.append(line)
+                live.code("".join(lines[-12:]))                  # the last few lines, updating as they arrive
+            proc.wait()
+            seconds = time.time() - started
+            out.append(f"=== {label}  ({script}, {seconds:.0f}s)\n" + "".join(lines)[-3000:])
+            if proc.returncode != 0:
+                out.append(f"Stopped: {script} failed.")
+                status.update(label=f"Stopped at step {n}: {label}", state="error")
+                return "\n".join(out)
+            live.empty()
+            st.write(f"✓ {label} ({seconds:.0f}s)")
+        status.update(label="Pipeline finished", state="complete")
     return "\n".join(out)
 
 st.set_page_config(page_title="Data intake", layout="wide")
@@ -46,8 +63,7 @@ if "flash" in st.session_state:
 # ---------------------------------------------------------------
 st.sidebar.write("**After loading:**")
 if st.sidebar.button("Run the pipeline"):
-    with st.spinner("Running: read remittances, identify payers, match..."):
-        st.session_state["pipeline_log"] = run_scripts(PIPELINE)
+    st.session_state["pipeline_log"] = run_scripts(PIPELINE)
     st.rerun()
 if "pipeline_log" in st.session_state:
     with st.expander("Pipeline output", expanded=True):
@@ -78,8 +94,7 @@ if kind == "Remittance emails":
         for e in emails:
             with open(os.path.join(INBOX, os.path.basename(e.name)), "wb") as f:
                 f.write(e.getvalue())
-        with st.spinner("Reading the emails..."):
-            st.session_state["pipeline_log"] = run_scripts(PIPELINE[:1])
+        st.session_state["pipeline_log"] = run_scripts(PIPELINE[:1])
         st.rerun()
     st.stop()
 

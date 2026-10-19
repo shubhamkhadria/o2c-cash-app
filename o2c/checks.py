@@ -68,6 +68,12 @@ def health_checks():
                        WHERE i.invoice_id IS NULL""")["n"][0]
     checks.append(("Every short pay has its residual item", missing == 0,
                    f"{missing} residual item(s) missing"))
+
+    # 5. Master data and open items have no duplicate IDs (a duplicate customer doubles every join)
+    dup_customers = query("SELECT COUNT(*) - COUNT(DISTINCT customer_id) AS n FROM customers")["n"][0]
+    dup_invoices = query("SELECT COUNT(*) - COUNT(DISTINCT invoice_id) AS n FROM invoices")["n"][0]
+    checks.append(("No duplicate customer or invoice IDs", bool(dup_customers == 0 and dup_invoices == 0),
+                   f"{dup_customers} duplicate customer row(s), {dup_invoices} duplicate invoice row(s)"))
     return checks
 
 
