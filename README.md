@@ -157,5 +157,10 @@ procure to pay, record to report, treasury and FP&A:
 - Next: deductions and collections agents, a second ERP's chart of accounts through the mapping agent.
 
 *References are cited for attribution only; this work is not affiliated with or endorsed by McKinsey, Bain, Deloitte, Gartner, SAP or any other organization mentioned. SAP is a trademark of SAP SE; all other trademarks belong to their respective owners. All data is synthetic.*
+
+## How this was built
+
+Built with Claude (Anthropic) as an AI pair-programmer and writing partner.
+I set the scope, the finance design, the business rules and controls, ran every test and checked every result; Claude drafted much of the code, documentation and slide text and explained it as we went.
 ---
 Built by Shubham Khadria · [LinkedIn](https://www.linkedin.com/in/REPLACE-ME)
