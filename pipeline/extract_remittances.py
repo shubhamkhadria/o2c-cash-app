@@ -17,7 +17,7 @@ import sqlite3
 
 import pandas as pd
 
-EXTRACTOR = "ollama"
+EXTRACTOR = "stub"
 CLOUD_KEY = os.environ.get("OLLAMA_API_KEY")          # a Codespaces secret; never written in code
 MODEL = "gpt-oss:20b" if CLOUD_KEY else "qwen2.5:3b"
 TOLERANCE = 1.00
@@ -37,6 +37,8 @@ Return ONLY valid JSON, no other text, in exactly this shape:
   ]
 }
 Rules: copy invoice numbers exactly; amounts as plain numbers without $ or commas;
+amount_paid is the NET amount actually paid for that invoice (after any deduction), never the gross
+invoice amount; the amount_paid of all lines must add up to payment_amount;
 payer_name is the company name only, without a department ("Accounts Payable") or an email address;
 "short X", "deducted X" or a balance to follow means deduction_amount X, with the reason given;
 if something is not in the document use null; never guess an invoice number."""
@@ -45,7 +47,7 @@ if something is not in the document use null; never guess an invoice number."""
 # ---------------------------------------------------------------
 # Step 2: call the AI (or the stand-in)
 # ---------------------------------------------------------------
-def call_ai(filename, text):
+def call_ai(filename, text, feedback=None):
     if EXTRACTOR == "stub":
         with open("fixtures/stub_extractions.json") as f:
             return json.load(f)[filename]
@@ -53,9 +55,11 @@ def call_ai(filename, text):
     import ollama                                     # only needed for the real call
     client = (ollama.Client(host="https://ollama.com", headers={"Authorization": f"Bearer {CLOUD_KEY}"})
               if CLOUD_KEY else ollama)
-    reply = client.chat(model=MODEL, format="json", options={"temperature": 0},
-                        messages=[{"role": "system", "content": PROMPT},
-                                  {"role": "user", "content": text}])
+    messages = [{"role": "system", "content": PROMPT}, {"role": "user", "content": text}]
+    if feedback:                                      # second try: tell the model what the ledger check found
+        messages.append({"role": "user", "content": "Your previous answer failed these checks against the "
+                         f"ledger: {feedback}. Read the document again and correct your JSON."})
+    reply = client.chat(model=MODEL, format="json", options={"temperature": 0}, messages=messages)
     return clean(json.loads(reply.message.content))
 
 
@@ -122,8 +126,14 @@ rows = []
 folder = "data/remittances"
 for filename in sorted(os.listdir(folder)):
     with open(os.path.join(folder, filename)) as f:
-        ext = call_ai(filename, f.read())
+        text = f.read()
+    ext = call_ai(filename, text)
     issues = validate(ext)
+    retried = False
+    if issues and EXTRACTOR == "ollama":              # one retry, with the validation result as feedback
+        second = call_ai(filename, text, feedback="; ".join(issues))
+        if not validate(second):                      # keep the retry only if it now passes every check
+            ext, issues, retried = second, [], True
     bank_ref = link_to_payment(ext)
     if bank_ref is None:
         issues.append("no single bank payment with this amount")
@@ -133,7 +143,7 @@ for filename in sorted(os.listdir(folder)):
                      "invoice_id": l["invoice_number"], "amount_paid": l["amount_paid"],
                      "deduction_amount": l["deduction_amount"], "deduction_reason": l["deduction_reason"],
                      "validation_status": status, "issues": "; ".join(issues)})
-    print(f"{filename}  {status:<12} {'; '.join(issues)}")
+    print(f"{filename}  {status:<12} {'(fixed on retry) ' if retried else ''}{'; '.join(issues)}")
 
 pd.DataFrame(rows).to_sql("remittance_extractions", con, if_exists="replace", index=False)
 
