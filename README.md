@@ -156,5 +156,6 @@ procure to pay, record to report, treasury and FP&A:
 - Model outputs vary from run to run; results above are reported as ranges for that reason.
 - Next: deductions and collections agents, a second ERP's chart of accounts through the mapping agent.
 
+*References to McKinsey, Bain and SAP are for citation only. This project is not affiliated with or endorsed by them. SAP is a trademark of SAP SE. All data is synthetic.*
 ---
 Built by Shubham Khadria · [LinkedIn](https://www.linkedin.com/in/REPLACE-ME)
