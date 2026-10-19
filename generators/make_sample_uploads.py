@@ -7,6 +7,8 @@ It exports today's synthetic customer master and open AR in two layouts a real c
   samples/simple_customer_master.csv   plain English headers ("Customer No", "Terms")  - easy for any planner
   samples/sap_customer_master.csv      SAP field names (KUNNR, NAME1, ZTERM ...)       - needs the AI
   samples/sap_open_items.xlsx          SAP open items (BELNR, KUNNR, BLDAT, FAEDT, WRBTR), German date format
+  samples/bank_b_export.csv            the same bank day from a different bank: one signed amount column,
+                                       different headers, a report title above them, and two debit lines
 The data is the same as in o2c.db, so loading it changes nothing except the layout it came from.
 """
 
@@ -19,6 +21,7 @@ os.makedirs("samples", exist_ok=True)
 con = sqlite3.connect("o2c.db")
 customers = pd.read_sql("SELECT * FROM customers ORDER BY customer_id", con)
 open_items = pd.read_sql("SELECT * FROM open_items ORDER BY invoice_id", con)
+bank = pd.read_sql("SELECT * FROM bank_payments ORDER BY payment_date, bank_ref", con)
 con.close()
 
 # 1. plain English export, e.g. from an accounting package
@@ -54,4 +57,20 @@ sap_items = pd.DataFrame({
 })
 sap_items.to_excel("samples/sap_open_items.xlsx", index=False, sheet_name="BSID")
 
-print(f"Wrote samples/: {len(customers)} customers (2 layouts), {len(open_items)} open items (SAP layout)")
+# 4. the same receipts as a second bank would export them (credits positive, debits negative)
+lines = pd.DataFrame({
+    "Value Date": bank["payment_date"],
+    "Reference": bank["bank_ref"],
+    "Remitter": bank["payer_name"],
+    "Details": bank["remittance_text"],
+    "Amount": bank["amount"].map(lambda v: f"{v:.2f}"),
+})
+debits = pd.DataFrame({"Value Date": ["2026-10-14", "2026-10-15"], "Reference": ["FEE1014", "PAY1015"],
+                       "Remitter": ["BANK SERVICE FEE", "PAYROLL RUN"], "Details": ["Monthly fee", "Salaries"],
+                       "Amount": ["-45.00", "-128400.00"]})
+with open("samples/bank_b_export.csv", "w") as f:
+    f.write("Bank B - Statement export\n\n")
+    pd.concat([lines, debits]).to_csv(f, index=False)
+
+print(f"Wrote samples/: {len(customers)} customers (2 layouts), {len(open_items)} open items (SAP layout), "
+      f"{len(bank)} receipts + 2 debits (bank B layout)")

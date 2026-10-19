@@ -1,18 +1,22 @@
 """
-o2c/intake.py  -  Week 10: load a customer's own files (any layout) into our standard tables.
+o2c/intake.py  -  Week 10: load a customer's own files (customer master, open AR, bank file) (any layout) into our standard tables.
 
+  read_upload(filename, data)          read a CSV or Excel file, skipping any report lines above the headers
   propose_mapping(kind, df, planner)   which uploaded column feeds which of our fields
                                         "saved": a layout a person already confirmed before
                                         "playbook": header names compared with a list of synonyms (no AI)
                                         "llm": a model reads the headers AND sample values (Ollama)
   check(kind, df, mapping)              rules: required fields, dates and amounts parse, no duplicates,
-                                        every invoice has a known customer. Returns the clean table + problems
+                                        every invoice has a known customer; bank files keep receipts only.
+                                        Returns the clean table + problems (notes in clean.attrs["notes"])
   load(kind, clean, mapping, user, filename)   backup, write the table, remember the mapping, log it
 
 The AI only proposes the mapping. A person confirms it, and the rules decide whether the data may load.
 """
 
+import csv
 import difflib
+import io
 import json
 import os
 import re
@@ -25,6 +29,7 @@ import pandas as pd
 from o2c.db import DB_PATH
 
 BACKUP_DIR = "backups"                     # *.db files are ignored by git
+NOT_CUSTOMER_CASH = r"INTEREST|FEE|TRANSFER|REVERSAL|RETURN"   # credit types that are the bank's, not a customer's
 CLOUD_KEY = os.environ.get("OLLAMA_API_KEY")
 MODEL = "gpt-oss:20b" if CLOUD_KEY else "qwen2.5:3b"
 
@@ -48,7 +53,36 @@ TARGETS = {
         "amount":       (False, "amount", "the original invoice amount", ["amount", "invoice amount", "original amount", "gross amount"]),
         "open_amount":  (True,  "amount", "the amount still open (unpaid)", ["open amount", "open", "balance", "amount due", "outstanding", "remaining"]),
     },
+    "Bank file": {
+        "bank_ref":        (True,  "text",   "the bank's unique reference for the transaction", ["bank reference", "reference", "bank ref", "transaction id", "ref"]),
+        "payment_date":    (True,  "date",   "the date the money arrived", ["post date", "value date", "posting date", "booking date", "date"]),
+        "amount":          (True,  "amount", "money received: the credit column, or a signed amount where debits are negative", ["credit", "amount", "credit amount", "deposit"]),
+        "payer_name":      (True,  "text",   "who paid: the payer name, or the description that contains it", ["payer", "remitter", "originator", "payer name", "description"]),
+        "txn_type":        (False, "text",   "transaction type, e.g. WIRE IN or ACH CREDIT", ["transaction type", "type", "txn type"]),
+        "remittance_text": (False, "text",   "free text the customer sent with the payment", ["customer reference", "details", "remittance", "memo", "narrative", "payment details"]),
+    },
 }
+
+
+# ---------------------------------------------------------------
+# Step 1b: read the file - bank exports often have report lines above the real headers
+# ---------------------------------------------------------------
+def read_upload(filename, data):
+    """Find the header row (the first row as wide as the table), then read everything below it as text."""
+    if filename.lower().endswith(".xlsx"):
+        raw = pd.read_excel(io.BytesIO(data), header=None, dtype=str).fillna("")
+        rows = raw.values.tolist()
+    else:
+        text = data.decode("utf-8-sig", errors="replace")
+        rows = list(csv.reader(io.StringIO(text)))
+    filled = [sum(1 for c in r if str(c).strip()) for r in rows[:30]]
+    width = max(filled)
+    start = next(i for i, n in enumerate(filled) if n >= width - 1)  # allow one empty header cell
+    header = [str(c).strip() or f"column_{i + 1}" for i, c in enumerate(rows[start])]
+    body = [list(r) + [""] * (len(header) - len(r)) for r in rows[start + 1:] if any(str(c).strip() for c in r)]
+    df = pd.DataFrame([[str(c).strip() for c in r[:len(header)]] for r in body], columns=header)
+    df.attrs["skipped_lines"] = start
+    return df
 
 
 # ---------------------------------------------------------------
@@ -100,7 +134,10 @@ def _playbook(kind, df):
 LLM_PROMPT = """You map columns of an uploaded finance file to a standard data model.
 Use the column names AND the sample values (codes like SAP field names are common, e.g. KUNNR = customer).
 Return ONLY JSON: {"<field>": {"column": "<exact uploaded column name or null>", "reason": "<short reason>"}}
-for every field listed. Use each uploaded column at most once. Use null if nothing fits; never guess. For open items: if the file has only one amount column, it is the open_amount."""
+for every field listed. Use each uploaded column at most once. Use null if nothing fits; never guess.
+For open items: if the file has only one amount column, it is the open_amount.
+For bank files: amount is the money received (a Credit column, or one signed amount column; never Debit)."""
+
 
 def _llm(kind, df, client=None):
     if client is None:
@@ -190,11 +227,16 @@ def check(kind, df, mapping):
         bad = clean[field].isna() & (raw != "")
         if bad.any():
             problems.append(f"{field}: {bad.sum()} value(s) could not be read, e.g. '{raw[bad].iloc[0]}' (row {bad.idxmax() + 2})")
-        missing = (raw == "") if req else pd.Series(False, index=df.index)
+        blank_ok = kind == "Bank file" and field == "amount"          # an empty credit means a debit line
+        missing = (raw == "") if req and not blank_ok else pd.Series(False, index=df.index)
         if missing.any():
             problems.append(f"{field}: {missing.sum()} row(s) are empty but the field is required")
 
-    key = list(targets)[0]                                       # customer_id or invoice_id
+    clean.attrs["notes"] = []
+    if kind == "Bank file":
+        clean = _bank_rules(clean, problems)
+
+    key = list(targets)[0]                                       # customer_id, invoice_id or bank_ref
     dupes = clean[key][clean[key].duplicated()]
     if len(dupes):
         problems.append(f"{key}: {len(dupes)} duplicate(s), e.g. {dupes.iloc[0]}")
@@ -220,6 +262,37 @@ def check(kind, df, mapping):
     return clean, problems
 
 
+def _bank_rules(clean, problems):
+    """Keep customer receipts only, tidy the payer name, and find invoice numbers in the free text."""
+    notes = []
+    receipts = clean["amount"].fillna(0) > 0
+    if (~receipts).any():
+        notes.append(f"{(~receipts).sum()} debit or empty line(s) set aside: not customer receipts")
+    if "txn_type" in clean:                                      # bank's own credits are not customer cash
+        own = receipts & clean["txn_type"].str.upper().str.contains(NOT_CUSTOMER_CASH, regex=True, na=False)
+        if own.any():
+            notes.append(f"{own.sum()} bank credit(s) set aside ({', '.join(sorted(set(clean['txn_type'][own])))}): "
+                         "not customer payments")
+        receipts &= ~own
+    clean = clean[receipts].copy()
+
+    exact = clean.duplicated(keep="first")                       # the same line exported twice
+    if exact.any():
+        notes.append(f"{exact.sum()} exact duplicate line(s) removed")
+    clean = clean[~exact].copy()
+
+    if "txn_type" in clean:                                      # "WIRE IN HORIZON RETAIL" -> "HORIZON RETAIL"
+        clean["payer_name"] = [n[len(t):].strip() if t and n.upper().startswith(t.upper()) else n
+                               for n, t in zip(clean["payer_name"], clean["txn_type"])]
+    if "remittance_text" not in clean:
+        clean["remittance_text"] = ""
+    known = set(_existing("SELECT invoice_id FROM invoices"))    # numbers that really are our invoices
+    clean["invoice_refs"] = [",".join(dict.fromkeys(n for n in re.findall(r"\d{5,}", t) if n in known))
+                             for t in clean["remittance_text"].fillna("")]
+    clean.attrs["notes"] = notes
+    return clean
+
+
 def _existing(sql):
     con = sqlite3.connect(DB_PATH)
     try:
@@ -231,6 +304,9 @@ def _existing(sql):
 def summary(kind, clean):
     if kind == "Customer master":
         return {"Rows": len(clean), "Customers": clean["customer_id"].nunique()}
+    if kind == "Bank file":
+        return {"Receipts": len(clean), "Total received": f"${clean['amount'].sum():,.2f}",
+                "With an invoice number": int((clean["invoice_refs"] != "").sum())}
     return {"Rows": len(clean), "Customers": clean["customer_id"].nunique(),
             "Total open": f"${clean['open_amount'].sum():,.2f}"}
 
@@ -254,14 +330,23 @@ def load(kind, df, clean, mapping, user, filename, planner):
     try:
         _setup(con)
         if kind == "Customer master":                            # add new customers, update known ones
+            known = {r[0] for r in con.execute("SELECT customer_id FROM customers")}
             for r in clean.itertuples(index=False):
                 row = r._asdict()
-                con.execute("INSERT OR IGNORE INTO customers (customer_id, name) VALUES (?, ?)",
-                            (row["customer_id"], row["name"]))
+                if row["customer_id"] not in known:              # the table has no unique key: check ourselves
+                    con.execute("INSERT INTO customers (customer_id, name) VALUES (?, ?)",
+                                (row["customer_id"], row["name"]))
                 sets = {k: v for k, v in row.items() if k != "customer_id" and pd.notna(v)}
                 con.execute(f"UPDATE customers SET {', '.join(f'{k} = ?' for k in sets)} WHERE customer_id = ?",
                             (*sets.values(), row["customer_id"]))
             total = None
+        elif kind == "Bank file":                                # a new bank day replaces the old one
+            con.execute("DELETE FROM bank_payments")
+            con.executemany("""INSERT INTO bank_payments (bank_ref, payment_date, amount, payer_name,
+                                   remittance_text, invoice_refs) VALUES (?, ?, ?, ?, ?, ?)""",
+                            clean[["bank_ref", "payment_date", "amount", "payer_name",
+                                   "remittance_text", "invoice_refs"]].values.tolist())
+            total = float(clean["amount"].sum())
         else:                                                    # replace today's open items; keep cleared history
             con.execute("DELETE FROM invoices WHERE status IN ('open', 'partially_paid')")
             for r in clean.itertuples(index=False):

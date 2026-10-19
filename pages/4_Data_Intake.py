@@ -3,12 +3,35 @@ pages/4_Data_Intake.py  -  Week 10: load a customer's own files, in whatever lay
 
 Upload a file, the mapping agent proposes which column feeds which field, you confirm,
 the rules check the data, and only then does it load (with a backup first).
+Remittance emails are saved to the inbox and read by the AI extractor.
+The sidebar runs the pipeline (extract, identify payer, match) on whatever is loaded.
 """
 
-import pandas as pd
+import os
+import subprocess
+import sys
+
 import streamlit as st
 
 from o2c import intake
+
+INBOX = "data/remittances"
+PIPELINE = [("Read remittances", "pipeline/extract_remittances.py"),
+            ("Identify payers", "pipeline/identify_payer.py"),
+            ("Match payments", "pipeline/matcher.py"),
+            ("Grade against the answer key (test data only)", "tools/grade_matcher.py")]
+
+
+def run_scripts(steps):
+    """Run pipeline scripts one after another, exactly as you would in the terminal; stop at the first error."""
+    out = []
+    for label, script in steps:
+        r = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=900)
+        out.append(f"=== {label}  ({script})\n{r.stdout[-2500:]}{r.stderr[-1500:]}")
+        if r.returncode != 0:
+            out.append(f"Stopped: {script} failed.")
+            break
+    return "\n".join(out)
 
 st.set_page_config(page_title="Data intake", layout="wide")
 user = st.sidebar.text_input("Signed in as", value="AR analyst")
@@ -19,20 +42,55 @@ if "flash" in st.session_state:
     getattr(st, kind_)(message)
 
 # ---------------------------------------------------------------
+# Sidebar: run the pipeline on whatever is loaded now
+# ---------------------------------------------------------------
+st.sidebar.write("**After loading:**")
+if st.sidebar.button("Run the pipeline"):
+    with st.spinner("Running: read remittances, identify payers, match..."):
+        st.session_state["pipeline_log"] = run_scripts(PIPELINE)
+    st.rerun()
+if "pipeline_log" in st.session_state:
+    with st.expander("Pipeline output", expanded=True):
+        st.code(st.session_state["pipeline_log"])
+        st.caption("Open Cash Application or Exceptions to work the results.")
+
+# ---------------------------------------------------------------
 # Step 1: what are you loading, and the file itself
 # ---------------------------------------------------------------
-kind = st.radio("What are you loading?", list(intake.TARGETS), horizontal=True)
-if kind == "Open AR":
-    st.info("Load the customer master first: every open item must belong to a known customer. "
-            "Loading open AR replaces today's open items; cleared history stays.")
+kind = st.radio("What are you loading?", list(intake.TARGETS) + ["Remittance emails"], horizontal=True)
+st.caption({"Customer master": "Adds new customers and updates known ones; never deletes.",
+            "Open AR": "Load the customer master first: every open item must belong to a known customer. "
+                       "Replaces today's open items; cleared history stays.",
+            "Bank file": "Replaces the current bank day. Only customer receipts load; debits are set aside.",
+            "Remittance emails": "Saved to the remittance inbox, then read by the AI extractor."}[kind])
+
+# Remittance emails: no columns to map - save them, then let the extractor read them
+if kind == "Remittance emails":
+    emails = st.file_uploader("Emails (.txt)", type=["txt"], accept_multiple_files=True)
+    if not emails:
+        st.stop()
+    clear = st.checkbox("Empty the inbox first (a new day)", value=True)
+    if st.button(f"Save {len(emails)} email(s) and read them with AI", type="primary"):
+        os.makedirs(INBOX, exist_ok=True)
+        if clear:
+            for old in os.listdir(INBOX):
+                os.remove(os.path.join(INBOX, old))
+        for e in emails:
+            with open(os.path.join(INBOX, os.path.basename(e.name)), "wb") as f:
+                f.write(e.getvalue())
+        with st.spinner("Reading the emails..."):
+            st.session_state["pipeline_log"] = run_scripts(PIPELINE[:1])
+        st.rerun()
+    st.stop()
+
 upload = st.file_uploader("File (CSV or Excel)", type=["csv", "xlsx"])
 if upload is None:
     st.stop()
 
-df = (pd.read_excel(upload, dtype=str) if upload.name.endswith(".xlsx")
-      else pd.read_csv(upload, dtype=str, keep_default_na=False)).fillna("")
-df.columns = [str(c).strip() for c in df.columns]
-st.write(f"**{upload.name}**: {len(df)} rows, {len(df.columns)} columns")
+df = intake.read_upload(upload.name, upload.getvalue())
+skipped = df.attrs.get("skipped_lines", 0)
+st.write(f"**{upload.name}**: {len(df)} rows, {len(df.columns)} columns"
+         + (f" (skipped {skipped} report line(s) above the headers)" if skipped else ""))
 st.dataframe(df.head(5), hide_index=True)
 
 # ---------------------------------------------------------------
@@ -89,6 +147,8 @@ if problems:
     st.stop()
 
 st.success("All checks passed")
+for note in clean.attrs.get("notes", []):
+    st.info(note)
 cols = st.columns(len(intake.summary(kind, clean)))
 for c, (label, value) in zip(cols, intake.summary(kind, clean).items()):
     c.metric(label, value)
@@ -104,8 +164,8 @@ if st.button(f"Load {len(clean)} rows into {kind}", type="primary"):
     try:
         message = intake.load(kind, df, clean, mapping, user, upload.name,
                               planner + (" + edited by person" if edited else ""))
-        st.session_state["flash"] = ("success", message + (" Re-run the pipeline (matcher) so it sees the new open items."
-                                                           if kind == "Open AR" else ""))
+        st.session_state["flash"] = ("success", message + (" Then click 'Run the pipeline' in the sidebar."
+                                                           if kind in ("Open AR", "Bank file") else ""))
         st.session_state.pop(state_key, None)
     except Exception as e:
         st.session_state["flash"] = ("error", f"Nothing was loaded: {e}")
