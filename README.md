@@ -26,6 +26,10 @@ AI reads, maps and investigates; deterministic rules match and check; a person a
 7. **Daily health checks.** Cash posted equals the drop in open AR to the cent, no negative balances,
    every posting has an approval, every short pay has its residual item, no duplicate IDs.
 
+| Data intake | Pipeline run | Daily health checks |
+|---|---|---|
+| ![Data intake](docs/screenshots/data-intake.png) | ![Pipeline](docs/screenshots/pipeline.png) | ![Health checks](docs/screenshots/home.png) |
+
 ## Architecture
 
 ```mermaid
