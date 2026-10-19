@@ -23,7 +23,8 @@ NAME_MATCH_THRESHOLD = 0.90   # how similar a name must be (0 to 1) to count as 
 # ---------------------------------------------------------------
 con = sqlite3.connect("o2c.db")
 payments = pd.read_sql("""SELECT b.bank_ref, b.payer_name, p.account_fingerprint, p.account_last4
-                          FROM bank_payments b JOIN payment_payer_accounts p USING (bank_ref)""", con)
+                          FROM bank_payments b LEFT JOIN payment_payer_accounts p USING (bank_ref)""", con)
+# LEFT JOIN: a payment with no payer account on file is still identified, by name
 accounts = pd.read_sql("SELECT account_fingerprint, customer_id, source FROM customer_bank_accounts", con)
 customers = pd.read_sql("SELECT customer_id, name FROM customers", con)
 
@@ -59,9 +60,6 @@ def identify(payment):
 
     scores = customers.assign(score=customers["name"].map(lambda n: name_score(payment["payer_name"], n)))
     best = scores[scores["score"] >= NAME_MATCH_THRESHOLD]
-    exact = best[best["name"].str.upper().str.replace(".", "") == payment["payer_name"].upper().replace(".", "")]
-    if len(exact) == 1:
-        best = exact
     for c in best.itertuples():                                        # 2. name match
         rows.append({"customer_id": c.customer_id, "method": "Name", "score": round(c.score, 2)})
     return rows or [{"customer_id": None, "method": "Unidentified", "score": 0.0}]   # 3. nothing
