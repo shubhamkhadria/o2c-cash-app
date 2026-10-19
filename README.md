@@ -164,4 +164,4 @@ Built with Claude (Anthropic) as an AI pair-programmer and writing partner.
 I set the scope, the finance design, the business rules and controls, ran every test and checked every result; Claude drafted much of the code, documentation and slide text and explained it as we went.
 
 ---
-Built by Shubham Khadria · [LinkedIn](https://www.linkedin.com/in/REPLACE-ME)
+Built by Shubham Khadria · [LinkedIn](https://www.linkedin.com/in/shubhamkhadria)
