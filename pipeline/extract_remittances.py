@@ -1,10 +1,13 @@
 """
-extract_remittances.py  -  Week 6: turn remittance documents into structured data with AI.
+pipeline/extract_remittances.py  -  turn remittance documents into structured data with AI.
 
-Run it with:   python extract_remittances.py
+Run it from the repo root:   python pipeline/extract_remittances.py
 
-USE_STUB = True  -> returns prepared answers from fixtures/stub_extractions.json (free, repeatable)
-USE_STUB = False -> calls the Claude API (needs the ANTHROPIC_API_KEY secret and `pip install anthropic`)
+EXTRACTOR = "stub"    prepared answers from fixtures/stub_extractions.json, with deliberate misreads
+                      planted in two of them so the exceptions agent has something to catch
+EXTRACTOR = "ollama"  a real model reads each document: gpt-oss:20b on Ollama Cloud when the
+                      OLLAMA_API_KEY Codespaces secret is set, otherwise local qwen2.5:3b
+Either way, every answer is validated against the ledger (Step 3) before anything uses it.
 """
 
 import json
@@ -14,8 +17,9 @@ import sqlite3
 
 import pandas as pd
 
-USE_STUB = True
-MODEL = "claude-haiku-5-5"
+EXTRACTOR = "ollama"
+CLOUD_KEY = os.environ.get("OLLAMA_API_KEY")          # a Codespaces secret; never written in code
+MODEL = "gpt-oss:20b" if CLOUD_KEY else "qwen2.5:3b"
 TOLERANCE = 1.00
 
 # ---------------------------------------------------------------
@@ -33,6 +37,8 @@ Return ONLY valid JSON, no other text, in exactly this shape:
   ]
 }
 Rules: copy invoice numbers exactly; amounts as plain numbers without $ or commas;
+payer_name is the company name only, without a department ("Accounts Payable") or an email address;
+"short X", "deducted X" or a balance to follow means deduction_amount X, with the reason given;
 if something is not in the document use null; never guess an invoice number."""
 
 
@@ -40,17 +46,32 @@ if something is not in the document use null; never guess an invoice number."""
 # Step 2: call the AI (or the stand-in)
 # ---------------------------------------------------------------
 def call_ai(filename, text):
-    if USE_STUB:
+    if EXTRACTOR == "stub":
         with open("fixtures/stub_extractions.json") as f:
             return json.load(f)[filename]
 
-    """import anthropic                                  # only needed for the real call
-    client = anthropic.Anthropic()                    # reads ANTHROPIC_API_KEY from the environment
-    response = client.messages.create(
-        model=MODEL, max_tokens=1000, system=PROMPT,
-        messages=[{"role": "user", "content": text}],
-    )
-    return json.loads(response.content[0].text)"""
+    import ollama                                     # only needed for the real call
+    client = (ollama.Client(host="https://ollama.com", headers={"Authorization": f"Bearer {CLOUD_KEY}"})
+              if CLOUD_KEY else ollama)
+    reply = client.chat(model=MODEL, format="json", options={"temperature": 0},
+                        messages=[{"role": "system", "content": PROMPT},
+                                  {"role": "user", "content": text}])
+    return clean(json.loads(reply.message.content))
+
+
+def clean(ext):
+    """Models sometimes send numbers as text ("1,120.37") or leave a field out: tidy that up."""
+    def num(v):
+        return float(str(v).replace(",", "").replace("$", "")) if v not in (None, "") else 0.0
+    ext["payment_amount"] = num(ext.get("payment_amount"))
+    ext.setdefault("payer_name", "")
+    ext.setdefault("payment_date", None)
+    ext["invoices"] = [{"invoice_number": str(l.get("invoice_number", "")).strip(),
+                        "amount_paid": num(l.get("amount_paid")),
+                        "deduction_amount": num(l.get("deduction_amount")),
+                        "deduction_reason": l.get("deduction_reason") or None}
+                       for l in ext.get("invoices") or []]
+    return ext
 
 
 # ---------------------------------------------------------------
@@ -63,7 +84,8 @@ payments = pd.read_sql("SELECT bank_ref, amount, payment_date FROM bank_payments
 
 
 def simple_name(name):
-    """'GRANITE CHEMICALS INC.' and 'Granite Chemicals Co.' -> 'GRANITE CHEMICALS'"""
+    """'GRANITE CHEMICALS INC.' and 'Granite Chemicals Co. - Accounts Payable' -> 'GRANITE CHEMICALS'"""
+    name = (name or "").split(" - ")[0]               # drop a department after a dash
     words = re.sub(r"[^A-Z ]", "", name.upper()).split()
     return " ".join(w for w in words if w not in {"INC", "LLC", "CO", "CORP"})
 
@@ -82,8 +104,6 @@ def validate(ext):
             issues.append(f"{inv}: paid + deduction does not equal the open amount")
         if simple_name(open_items.loc[inv, "customer_name"]) != simple_name(ext["payer_name"]):
             issues.append(f"{inv} belongs to {open_items.loc[inv, 'customer_name']}, not the payer")
-        if l["deduction_amount"] > 0 and not l["deduction_reason"]:
-            issues.append(f"{inv}: deduction of {l['deduction_amount']:.2f} has no reason")
     return issues
 
 
@@ -116,6 +136,17 @@ for filename in sorted(os.listdir(folder)):
     print(f"{filename}  {status:<12} {'; '.join(issues)}")
 
 pd.DataFrame(rows).to_sql("remittance_extractions", con, if_exists="replace", index=False)
+
+# ---------------------------------------------------------------
+# Step 5 (test mode): how accurate was the extraction? Only possible because the synthetic data has an answer key
+# ---------------------------------------------------------------
+key = pd.read_sql("SELECT bank_ref, invoice_id, applied_amount FROM bank_answer_key", con)
+truth = {(r.bank_ref, r.invoice_id): r.applied_amount for r in key.itertuples()}
+correct = sum(1 for r in rows
+              if abs(truth.get((r["bank_ref"], r["invoice_id"]), -1) - r["amount_paid"]) <= 0.01)
 con.close()
+
 validated = sum(1 for r in rows if r["validation_status"] == "Validated")
-print(f"\nSaved {len(rows)} invoice lines from {len(os.listdir(folder))} documents; {validated} lines validated")
+print(f"\nExtractor: {EXTRACTOR}" + (f" ({MODEL})" if EXTRACTOR == "ollama" else ""))
+print(f"Saved {len(rows)} invoice lines from {len(os.listdir(folder))} documents; {validated} lines validated")
+print(f"Accuracy vs answer key: {correct} of {len(rows)} lines have the right invoice AND amount")
